@@ -1,3 +1,2 @@
-﻿# lifeOS-frontend
 # lifeOS-frontend
 
