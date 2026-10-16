@@ -1,0 +1,151 @@
+.records-shell {
+  background: var(--lifeos-bg);
+  background-image: radial-gradient(ellipse at 50% 56%, #fffdf8 0, var(--lifeos-bg) 72%);
+}
+
+.records-shell .records-frame,
+.records-shell .records-panel {
+  background: #fffaf0;
+}
+
+.records-shell .record-card,
+.records-shell .record-gallery-card {
+  border-color: #e9e3d9;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: #182b3a;
+  box-shadow: 0 5px 18px rgba(58,52,42,.045);
+}
+
+.records-shell .record-card::before,
+.records-shell .record-card::after,
+.records-shell .record-gallery-card::before,
+.records-shell .record-gallery-card::after {
+  display: none;
+}
+
+.records-shell .record-card-top,
+.records-shell .record-card p,
+.records-shell .record-gallery-card time {
+  color: #71808a;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.records-shell .record-card h2,
+.records-shell .record-gallery-card h2 {
+  color: #182b3a;
+  font: 600 1.15rem/1.2 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: 0;
+}
+
+.records-shell .record-card p { font-size: .9rem; line-height: 1.55; }
+
+.records-shell .record-timeline-item:not(:last-child)::before {
+  background: #c8d9c7;
+}
+
+.records-shell .record-node {
+  background: #fffaf0;
+  border-color: #8bc7a5;
+  box-shadow: 0 0 0 4px rgba(139,199,165,.16);
+}
+
+.records-shell .add-record-trigger {
+  border-color: #c9d7c6;
+  color: #55785d;
+  font: 600 .72rem 'DM Sans', sans-serif;
+  letter-spacing: .02em;
+}
+
+.records-shell .add-record-trigger:hover {
+  border-color: #55785d;
+  color: #394f3b;
+}
+
+.records-shell .records-header {
+  background: #fffaf0;
+  border-color: #e9e3d9;
+}
+
+.records-shell .records-header h1 {
+  color: #182b3a;
+  font: 600 1.7rem/1.1 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: 0;
+}
+
+.records-shell .records-tabs {
+  background: transparent;
+}
+
+.records-shell .records-tabs button {
+  color: #71808a;
+  font: 600 .68rem 'DM Sans', sans-serif;
+  letter-spacing: .04em;
+}
+
+.records-shell .records-tabs button:hover,
+.records-shell .records-tabs button.active {
+  border-bottom-color: #55785d;
+  background: rgba(139,199,165,.1);
+  color: #394f3b;
+  text-shadow: none;
+}
+
+.records-shell .bottom-nav {
+  --nav-bg: #fffdf8;
+  --nav-border: #e9e3d9;
+  --nav-active-bg: transparent;
+  --nav-active-border: transparent;
+  --nav-active-color: #55785d;
+  --nav-muted-color: #89949b;
+}
+
+.records-shell .record-create-overlay {
+  background: rgba(24,43,58,.3);
+}
+
+.records-shell .record-create-panel {
+  border-color: #e9e3d9;
+  border-radius: 22px 22px 0 0;
+  background: #fffaf0;
+  box-shadow: 0 -12px 38px rgba(34,50,57,.15);
+}
+
+.records-shell .record-create-panel h2 {
+  color: #182b3a;
+  font: 600 1.55rem 'Cormorant Garamond', Georgia, serif;
+}
+
+.records-shell .record-create-panel label > span,
+.records-shell .record-ai,
+.records-shell .record-icon-picker,
+.records-shell .record-image-field {
+  color: #65727b;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.records-shell .record-create-panel input,
+.records-shell .record-create-panel textarea {
+  border-radius: 9px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.records-shell .record-create-top button,
+.records-shell .record-mode-tabs button {
+  border-radius: 99px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.records-shell .record-ai button,
+.records-shell .add-record-submit {
+  border: 0;
+  border-radius: 99px;
+  background: #55785d;
+  color: #fff;
+  font: 600 .78rem 'DM Sans', sans-serif;
+}
+
+.records-shell .record-ai button:hover,
+.records-shell .add-record-submit:hover {
+  background: #3f6248;
+}

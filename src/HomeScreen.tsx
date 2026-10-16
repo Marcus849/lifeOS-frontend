@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ProgressScreen, { type QuestCompletion } from "./ProgressScreen";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,25 +26,40 @@ function HudCorners({ bright = false, size = 16 }: { bright?: boolean; size?: nu
   );
 }
 
-// Generate quest nodes based on user's goal category
+type QuestStep = { title: string; focusLabel: string; focus: string; reason: string };
+
+function getQuestAnswer(value: Answers[number] | undefined, fallback: string) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length >= 3 ? text : fallback;
+}
+
 function getQuestData(answers: Answers) {
-  const goalText = answers[1] as string;
-  const gap = answers[6] as string;
-  const bottleneck = answers[8] as string;
-  const evidence = answers[13] as string;
-  const firstObjective = answers[15] as string;
+  const goal = getQuestAnswer(answers[1], "a goal that matters to you")
+    .replace(/^I will\s+/i, "")
+    .replace(/[.!?]+$/, "");
+  const obstacle = getQuestAnswer(answers[8] || answers[2] || answers[6], "the main obstacle you're facing");
+  const context = getQuestAnswer(answers[12] || answers[3], "the time and energy you can realistically give");
+  const isBusinessGoal = /\b(business|startup|company|customers?)\b/i.test(goal);
 
   return {
-    title: goalText?.slice(0, 32) || "YOUR NEXT CAPABILITY",
-    current: firstObjective?.slice(0, 42) || bottleneck?.slice(0, 42) || "MAP THE FIRST SMALL TEST",
+    title: goal,
+    chapter: "Find the Opportunity",
+    chapterNumber: 1,
     nodes: [
-      `CLARIFY: ${bottleneck?.slice(0, 22) || "THE BOTTLENECK"}`,
-      `PRACTICE: ${gap?.slice(0, 22) || "THE MISSING PIECE"}`,
-      "RUN A REAL-WORLD TEST",
-      `CAPTURE: ${evidence?.slice(0, 22) || "VISIBLE EVIDENCE"}`,
-      "REVIEW THE SIGNAL",
-      "REACH THE FIRST RESULT",
-    ],
+      {
+        title: isBusinessGoal ? "Talk to 3 potential customers" : "Define your direction",
+        focusLabel: isBusinessGoal ? "YOUR FIRST CONVERSATIONS" : "YOUR DIRECTION",
+        focus: isBusinessGoal ? "Ask three people who might use your idea what they need most." : goal,
+        reason: isBusinessGoal
+          ? "Real conversations help you discover what people need before you invest in building a solution."
+          : "A clear destination gives your journey direction.",
+      },
+      { title: "Name the friction", focusLabel: "WHAT'S IN THE WAY", focus: obstacle, reason: "Understanding the obstacle helps you choose a useful response." },
+      { title: "Make a plan that fits", focusLabel: "YOUR REAL-LIFE RHYTHM", focus: context, reason: "A plan shaped around real life is easier to return to." },
+      { title: "Take one practical step", focusLabel: "YOUR NEXT MOVE", focus: "Choose one small action you can complete today.", reason: "Small actions turn intention into momentum." },
+      { title: "Notice what changed", focusLabel: "WHAT YOU LEARNED", focus: "What felt easier, harder, or different than you expected?", reason: "Noticing what happened helps you build on what works." },
+      { title: "Choose what comes next", focusLabel: "YOUR NEXT DIRECTION", focus: `Use what you learned to move toward ${goal}.`, reason: "Progress gives you better information for the next step." },
+    ] satisfies QuestStep[],
   };
 }
 
@@ -136,18 +152,16 @@ function Connector({ fromX, toX, done }: { fromX: number; toX: number; done: boo
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { icon: "🛒", label: "SHOP" },
-  { icon: "📋", label: "MISSIONS" },
-  { icon: "🏠", label: "HOME", active: true },
-  { icon: "📖", label: "RECORDS" },
-  { icon: "👤", label: "PROFILE" },
+  { icon: "⌖", label: "MISSIONS", destination: "MISSIONS" },
+  { icon: "⌂", label: "HOME", destination: "HOME" },
+  { icon: "◷", label: "RECORDS", destination: "RECORDS" },
 ];
 
 type Theme = "dark";
 
 function BottomNav({ active, onSelect, theme = "default" }: { active: string; onSelect: (label: string) => void; theme?: Theme }) {
   return (
-    <div className={`bottom-nav theme-${theme}`} style={{
+    <nav className={`bottom-nav theme-${theme}`} aria-label="Main navigation" style={{
       display: "flex",
       borderTop: "1px solid var(--nav-border, #0d3a5c)",
       background: "var(--nav-bg, #050f1e)",
@@ -157,11 +171,13 @@ function BottomNav({ active, onSelect, theme = "default" }: { active: string; on
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg, transparent, #00c8ff, transparent)", opacity: 0.4 }} />
 
       {NAV_ITEMS.map((item) => {
-        const isActive = item.label === active;
+        const isActive = item.destination === active;
         return (
           <button
-            key={item.label}
-            onClick={() => onSelect(item.label)}
+            key={item.destination}
+            type="button"
+            aria-current={isActive ? "page" : undefined}
+            onClick={() => onSelect(item.destination)}
             style={{
               flex: 1,
               display: "flex",
@@ -176,19 +192,8 @@ function BottomNav({ active, onSelect, theme = "default" }: { active: string; on
               gap: 3,
             }}
           >
-            {/* Active HOME gets a pentagon-ish background */}
-            {isActive && (
-              <div style={{
-                position: "absolute",
-                inset: "4px 6px",
-                background: "var(--nav-active-bg, rgba(0,200,255,0.08))",
-                border: "1px solid var(--nav-active-border, rgba(0,200,255,0.3))",
-                clipPath: "polygon(50% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)",
-                boxShadow: "var(--nav-active-shadow, 0 0 16px rgba(0,200,255,0.15))",
-              }} />
-            )}
-            <span style={{ fontSize: "1.1rem", lineHeight: 1, position: "relative" }}>{item.icon}</span>
-            <span style={{
+            <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+            <span className="nav-label" style={{
               fontFamily: "var(--font-mono)",
               fontSize: "0.5rem",
               letterSpacing: "0.08em",
@@ -198,10 +203,11 @@ function BottomNav({ active, onSelect, theme = "default" }: { active: string; on
             }}>
               {item.label}
             </span>
+            <span className="nav-indicator" aria-hidden="true" />
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
@@ -351,8 +357,10 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
   const [missions, setMissions] = useState(initialMissions);
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
+  const [holdingMissionId, setHoldingMissionId] = useState<string | null>(null);
   const [missionTypeModal, setMissionTypeModal] = useState(false);
   const [taskCreationModal, setTaskCreationModal] = useState(false);
+  const [editingMissionId, setEditingMissionId] = useState<string | null>(null);
   const [selectedMissionType, setSelectedMissionType] = useState<"Task" | "Habit" | "Daily" | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskNotes, setTaskNotes] = useState("");
@@ -391,6 +399,7 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
   const closeMissionModals = () => {
     setMissionTypeModal(false);
     setTaskCreationModal(false);
+    setEditingMissionId(null);
   };
 
   const openMissionCreation = (type: "Task" | "Habit" | "Daily") => {
@@ -401,8 +410,22 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
     setTaskChecklistItems([]);
     setTaskDifficulty("B");
     setTaskDueDate("");
+    setEditingMissionId(null);
     setCalendarMonth(new Date());
     setMissionTypeModal(false);
+    setTaskCreationModal(true);
+  };
+
+  const openMissionEdit = (mission: (typeof missions)[number]) => {
+    setSelectedMissionType(mission.status as "Task" | "Habit" | "Daily");
+    setEditingMissionId(mission.id);
+    setTaskTitle(mission.title);
+    setTaskNotes("");
+    setTaskChecklist("");
+    setTaskChecklistItems(mission.checklist);
+    setTaskDifficulty(mission.rank);
+    setTaskDueDate("");
+    setCalendarMonth(new Date());
     setTaskCreationModal(true);
   };
 
@@ -420,10 +443,16 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
     const checklist = taskChecklist.trim()
       ? [...taskChecklistItems, { id: `checklist-${Date.now()}-${taskChecklistItems.length}`, text: taskChecklist.trim(), completed: false }]
       : taskChecklistItems;
-    setMissions((current) => [
-      ...current,
-      { id: `mission-${Date.now()}`, title: title.toUpperCase(), category: selectedMissionType === "Habit" ? "LIFE" : selectedMissionType === "Daily" ? "HEALTH" : "ACADEMIC", status: selectedMissionType || "Task", rank: taskDifficulty, checklist },
-    ]);
+    if (editingMissionId) {
+      setMissions((current) => current.map((mission) => mission.id === editingMissionId
+        ? { ...mission, title: title.toUpperCase(), rank: taskDifficulty, checklist }
+        : mission));
+    } else {
+      setMissions((current) => [
+        ...current,
+        { id: `mission-${Date.now()}`, title: title.toUpperCase(), category: selectedMissionType === "Habit" ? "LIFE" : selectedMissionType === "Daily" ? "HEALTH" : "ACADEMIC", status: selectedMissionType || "Task", rank: taskDifficulty, checklist },
+      ]);
+    }
     setTaskTitle("");
     setTaskNotes("");
     setTaskChecklist("");
@@ -433,20 +462,32 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
     closeMissionModals();
   };
 
-  const toggleMission = (id: string) => {
-    setCompleted((current) => ({ ...current, [id]: !current[id] }));
+  const toggleMissionCompletion = (id: string) => {
+    const wasCompleted = Boolean(completed[id]);
+    setCompleted((current) => ({ ...current, [id]: !wasCompleted }));
     setMissions((current) => {
-      const missionIndex = current.findIndex((mission) => mission.id === id);
-      if (missionIndex === -1 || missionIndex === current.length - 1) return current;
-      return [...current.slice(0, missionIndex), ...current.slice(missionIndex + 1), current[missionIndex]];
+      const index = current.findIndex((mission) => mission.id === id);
+      if (index === -1) return current;
+      const remaining = [...current.slice(0, index), ...current.slice(index + 1)];
+      return wasCompleted ? [current[index], ...remaining] : [...remaining, current[index]];
     });
   };
 
+  const startMissionHold = (id: string, event?: React.PointerEvent<HTMLElement>) => {
+    if ((event && event.button !== 0) || holdingMissionId !== null) return;
+    if (event && (event.target as HTMLElement).closest("button, input, label")) return;
+    if (event) event.currentTarget.setPointerCapture(event.pointerId);
+    setHoldingMissionId(id);
+  };
+
+  const cancelMissionHold = () => {
+    setHoldingMissionId(null);
+  };
+
   return (
-    <div className={`missions-shell theme-${theme}`}>
+    <div className={`missions-shell missions-redesign theme-${theme}`}>
       <div className="scanlines" />
       <div className="missions-frame">
-        <HudCorners bright size={18} />
         <header className="missions-header">
           <h1>MISSIONS</h1>
           <button type="button" className="missions-add-btn" aria-label="Add mission" onClick={openMissionTypeModal}>+</button>
@@ -480,7 +521,7 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
                 <button type="button" onClick={closeMissionModals}>CANCEL</button>
                 <button type="submit" disabled={!taskTitle.trim()}>SAVE</button>
               </div>
-              <h2 id="task-creation-title">MISSION CREATION</h2>
+              <h2 id="task-creation-title">{editingMissionId ? "EDIT MISSION" : "MISSION CREATION"}</h2>
               <label><span>MISSION TITLE:</span><input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="TYPE HERE..." autoFocus /></label>
               <label><span>NOTES:</span><textarea value={taskNotes} onChange={(event) => setTaskNotes(event.target.value)} placeholder="TYPE HERE..." rows={2} /></label>
               <label>
@@ -505,18 +546,50 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
 
         <main className="missions-list">
           {missions.map((mission) => (
-            <article key={mission.id} className={`mission-card${completed[mission.id] ? " mission-card-completed" : ""}${mission.checklist.length ? " mission-card-has-checklist" : ""}`}>
+            <article
+              key={mission.id}
+              className={`mission-card${completed[mission.id] ? " mission-card-completed" : ""}${holdingMissionId === mission.id ? " is-holding" : ""}${mission.checklist.length ? " mission-card-has-checklist" : ""}`}
+              tabIndex={0}
+              onPointerDown={(event) => startMissionHold(mission.id, event)}
+              onPointerUp={cancelMissionHold}
+              onPointerCancel={cancelMissionHold}
+              onLostPointerCapture={cancelMissionHold}
+              onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget.querySelector(".mission-hold-outline path")
+                  && event.animationName === "quest-outline-draw"
+                  && holdingMissionId === mission.id) {
+                  setHoldingMissionId(null);
+                  toggleMissionCompletion(mission.id);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.target === event.currentTarget && (event.key === " " || event.key === "Enter") && !event.repeat) {
+                  event.preventDefault();
+                  startMissionHold(mission.id);
+                }
+              }}
+              onKeyUp={(event) => {
+                if (event.target === event.currentTarget && (event.key === " " || event.key === "Enter")) {
+                  event.preventDefault();
+                  cancelMissionHold();
+                }
+              }}
+              onBlur={cancelMissionHold}
+              onContextMenu={(event) => event.preventDefault()}
+              aria-label={`Press and hold to ${completed[mission.id] ? "undo completion for" : "complete"} ${mission.title}`}
+            >
+              <svg className="mission-hold-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M50 1 H94 Q99 1 99 6 V94 Q99 99 94 99 H6 Q1 99 1 94 V6 Q1 1 6 1 H50" /></svg>
               <div className="mission-card-main">
-                <button type="button" className="mission-check" aria-label={`${completed[mission.id] ? "Uncomplete" : "Complete"} ${mission.title}`} aria-pressed={Boolean(completed[mission.id])} onClick={() => toggleMission(mission.id)}>{completed[mission.id] ? "✓" : ""}</button>
-                <div className="mission-copy"><h2>{mission.title}</h2><div className="mission-tag">{mission.category}</div></div>
+                <div className="mission-copy"><h2>{mission.title}</h2></div>
                 <div className="mission-meta"><div className="mission-status-line"><span className="mission-label">Status:</span><span className="mission-status-value">{mission.status}</span></div><div className="mission-rank-line"><span className="mission-label">Rank:</span><span className="mission-rank">{mission.rank}</span></div></div>
-                <button type="button" className="mission-edit-btn" aria-label={`Edit ${mission.title}`}>✎</button>
+                <button type="button" className="mission-edit-btn" aria-label={`Edit ${mission.title}`} onClick={() => openMissionEdit(mission)}>✎</button>
               </div>
               {mission.checklist.length > 0 && <><button type="button" className="mission-expand-btn" aria-expanded={Boolean(expandedMissions[mission.id])} onClick={() => setExpandedMissions((current) => ({ ...current, [mission.id]: !current[mission.id] }))}>{expandedMissions[mission.id] ? "HIDE CHECKLIST" : `SHOW CHECKLIST (${mission.checklist.length})`}</button>{expandedMissions[mission.id] && <div className="mission-checklist">{mission.checklist.map((item) => <label className={`mission-checklist-item${item.completed ? " completed" : ""}`} key={item.id}><input type="checkbox" checked={item.completed} onChange={() => setMissions((current) => current.map((currentMission) => currentMission.id === mission.id ? { ...currentMission, checklist: currentMission.checklist.map((currentItem) => currentItem.id === item.id ? { ...currentItem, completed: !currentItem.completed } : currentItem) } : currentMission))} /><span>{item.text}</span></label>)}</div>}</>}
             </article>
           ))}
         </main>
 
+        <p className="mission-hold-hint">Press and hold to complete</p>
         <div className="missions-nav-wrap">
           <BottomNav active="MISSIONS" onSelect={onNavigate} theme={theme} />
         </div>
@@ -525,15 +598,78 @@ function MissionsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (labe
   );
 }
 
-function RecordsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (label: string) => void }) {
-  type RecordEntry = { id: string; date: string; title: string; description: string; icon: string; mode: "TEXT" | "IMAGE"; image?: string };
-  const initialRecords: RecordEntry[] = [
-    { id: "first-step", date: "12/07/26", title: "FIRST STEP TAKEN", description: "Completed Quest 1. Identified my biggest weakness and set my first target. Feels small but it's real.", icon: "🌱", mode: "TEXT" },
-    { id: "consistency", date: "12/15/26", title: "CONSISTENCY UNLOCKED", description: "7-day streak achieved. Never made it this far before. The habit is starting to feel automatic.", icon: "🔥", mode: "TEXT" },
-    { id: "boss-defeated", date: "12/30/26", title: "FIRST BOSS DEFEATED", description: "Completed the Chapter 1 boss challenge. It was harder than I expected but I did it.", icon: "⚔️", mode: "TEXT" },
-  ];
-  const [records, setRecords] = useState<RecordEntry[]>(initialRecords);
-  const [view, setView] = useState<"TIMELINE" | "GALLERY" | "STATS">("TIMELINE");
+type RecordEntry = {
+  id: string;
+  date: string;
+  createdAt: string;
+  title: string;
+  description: string;
+  icon: string;
+  mode: "TEXT" | "IMAGE";
+  image?: string;
+};
+
+function isRecordEntry(value: unknown): value is RecordEntry {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Partial<RecordEntry>;
+  return typeof entry.id === "string"
+    && typeof entry.date === "string"
+    && typeof entry.createdAt === "string"
+    && Number.isFinite(new Date(entry.createdAt).getTime())
+    && typeof entry.title === "string"
+    && typeof entry.description === "string"
+    && typeof entry.icon === "string"
+    && (entry.mode === "TEXT" || entry.mode === "IMAGE")
+    && (entry.image === undefined || typeof entry.image === "string");
+}
+
+type RecordsScreenProps = {
+  theme: Theme;
+  onNavigate: (label: string) => void;
+  userId: string;
+  signupDate: string;
+  signupStorageError: string;
+  progressStorageError: string;
+  goal: string;
+  chapter: string;
+  progressPercent: number;
+  completedQuestTitles: string[];
+  completionHistory: QuestCompletion[];
+};
+
+function RecordsScreen({
+  theme,
+  onNavigate,
+  userId,
+  signupDate,
+  signupStorageError,
+  progressStorageError,
+  goal,
+  chapter,
+  progressPercent,
+  completedQuestTitles,
+  completionHistory,
+}: RecordsScreenProps) {
+  const recordsStorageKey = `lifeos-records-${userId}`;
+  const [initialData] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(recordsStorageKey);
+      if (!saved) return { records: [] as RecordEntry[], error: "" };
+      const parsed: unknown = JSON.parse(saved);
+      if (!Array.isArray(parsed) || !parsed.every(isRecordEntry)) {
+        throw new Error("Saved records have an unexpected format.");
+      }
+      return { records: parsed, error: "" };
+    } catch {
+      return {
+        records: [] as RecordEntry[],
+        error: "Your saved records couldn't be loaded. Check this browser's storage and try again.",
+      };
+    }
+  });
+  const [records, setRecords] = useState<RecordEntry[]>(initialData.records);
+  const [storageError, setStorageError] = useState(initialData.error);
+  const [view, setView] = useState<"TIMELINE" | "GALLERY" | "PROGRESS">("TIMELINE");
   const [createRecordOpen, setCreateRecordOpen] = useState(false);
   const [recordMode, setRecordMode] = useState<"TEXT" | "IMAGE">("TEXT");
   const [recordDate, setRecordDate] = useState(() => new Date().toLocaleDateString("en-GB"));
@@ -542,6 +678,16 @@ function RecordsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (label
   const [recordIcon, setRecordIcon] = useState("⭐");
   const [recordImage, setRecordImage] = useState("");
   const icons = ["⭐", "🔥", "⚔️", "🌱", "💪", "🧠", "🏆", "⚡", "🎯", "🌈", "🛡️", "☀️"];
+  const signupDateLabel = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(signupDate));
+
+  useEffect(() => {
+    if (!createRecordOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") resetRecordForm();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [createRecordOpen]);
 
   const resetRecordForm = () => {
     setCreateRecordOpen(false);
@@ -556,23 +702,36 @@ function RecordsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (label
   const saveRecord = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!recordTitle.trim() || (recordMode === "TEXT" && !recordDescription.trim()) || (recordMode === "IMAGE" && !recordImage)) return;
-    setRecords((current) => [...current, {
-      id: `record-${Date.now()}`,
+    const nextRecord: RecordEntry = {
+      id: `record-${globalThis.crypto.randomUUID()}`,
       date: recordDate,
+      createdAt: new Date().toISOString(),
       title: recordTitle.trim().toUpperCase(),
       description: recordDescription.trim() || "Image record added to the archive.",
       icon: recordIcon,
       mode: recordMode,
       image: recordImage || undefined,
-    }]);
-    resetRecordForm();
+    };
+    const nextRecords = [...records, nextRecord];
+    try {
+      window.localStorage.setItem(recordsStorageKey, JSON.stringify(nextRecords));
+      setRecords(nextRecords);
+      setStorageError("");
+      resetRecordForm();
+    } catch {
+      setStorageError("This record couldn't be saved. The image may be too large for this browser's storage.");
+    }
   };
 
   const handleRecordImage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setRecordImage(typeof reader.result === "string" ? reader.result : "");
+    reader.onload = () => {
+      if (typeof reader.result === "string") setRecordImage(reader.result);
+      else setStorageError("This image couldn't be read. Please choose another image.");
+    };
+    reader.onerror = () => setStorageError("This image couldn't be read. Please choose another image.");
     reader.readAsDataURL(file);
   };
 
@@ -590,23 +749,108 @@ function RecordsScreen({ theme, onNavigate }: { theme: Theme; onNavigate: (label
         <header className="records-header">
           <div className="records-title-row"><h1>RECORDS</h1><span className="records-info">ⓘ</span></div>
           <nav className="records-tabs" aria-label="Record views">
-            {(["TIMELINE", "GALLERY", "STATS"] as const).map((tab) => <button key={tab} type="button" className={view === tab ? "active" : ""} onClick={() => setView(tab)}>{tab}</button>)}
+            {(["TIMELINE", "GALLERY", "PROGRESS"] as const).map((tab) => <button key={tab} type="button" className={view === tab ? "active" : ""} onClick={() => setView(tab)}>{tab}</button>)}
           </nav>
         </header>
         <main className={`records-panel records-${view.toLowerCase()}`}>
-          {view === "TIMELINE" && <div className="records-timeline">{records.filter((record) => record.mode === "TEXT").map((record) => <article className="record-timeline-item" key={record.id}><span className="record-node" /><div className="record-card"><div className="record-card-top"><time>{record.date}</time>{renderRecordIcon(record)}</div><h2>{record.title}</h2><p>{record.description}</p></div></article>)}</div>}
-          {view === "GALLERY" && <div className="records-gallery">{records.filter((record) => record.mode === "IMAGE").map((record) => <article className="record-gallery-card" key={record.id}>{record.image ? <img src={record.image} alt="" /> : <div className="record-gallery-icon">{record.icon}</div>}<h2>{record.title}</h2><time>{record.date}</time></article>)}</div>}
-          {view === "STATS" && <div className="records-stats"><div className="records-chart"><span className="records-section-label">▸ PROGRESS CHART</span><div className="chart-line"><i /><i /><i /><i /><i /><i /></div></div><div className="stat-row"><span>🎯 &nbsp; QUESTS COMPLETED</span><strong>0</strong></div><div className="stat-row"><span>⚔️ &nbsp; BOSSES DEFEATED</span><strong>0</strong></div><div className="stat-row"><span>📖 &nbsp; STORY CHAPTERS DONE</span><strong>0</strong></div><div className="stat-row"><span>🗓️ &nbsp; DAYS ACTIVE</span><strong>{records.length}</strong></div><div className="stat-row"><span>🗓️ &nbsp; CURRENT JOURNEY</span><strong>10 DAYS</strong></div><div className="records-before-now"><span className="records-section-label">▸ BEFORE / NOW</span><div><span>BEFORE<br /><strong>Struggling with social &amp; life</strong></span><span>NOW<br /><strong>{records.length} records logged</strong></span></div></div></div>}
-          <button className="add-record-trigger" type="button" onClick={() => setCreateRecordOpen(true)}>+ &nbsp; ADD A NEW RECORD</button>
+          {view === "TIMELINE" && (
+            <div className="records-timeline">
+              <article className="record-timeline-item signup-timeline-item">
+                <span className="record-node" />
+                <div className="record-card">
+                  <div className="record-card-top"><time dateTime={signupDate}>{signupDateLabel}</time><span aria-hidden="true">✳</span></div>
+                  <h2>YOUR JOURNEY BEGAN</h2>
+                  <p>You joined LifeOS. The next steps in your story are yours to add.</p>
+                </div>
+              </article>
+              {[...records].filter((record) => record.mode === "TEXT").sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((record) => (
+                <article className="record-timeline-item" key={record.id}>
+                  <span className="record-node" />
+                  <div className="record-card"><div className="record-card-top"><time>{record.date}</time>{renderRecordIcon(record)}</div><h2>{record.title}</h2><p>{record.description}</p></div>
+                </article>
+              ))}
+            </div>
+          )}
+          {view === "GALLERY" && (
+            records.some((record) => record.mode === "IMAGE") ? (
+              <div className="records-gallery">
+                {[...records].filter((record) => record.mode === "IMAGE").sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((record) => (
+                  <article className="record-gallery-card" key={record.id}>
+                    {record.image ? <img src={record.image} alt={record.title} /> : <div className="record-gallery-icon">{record.icon}</div>}
+                    <h2>{record.title}</h2><time>{record.date}</time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="records-empty-state"><span aria-hidden="true">✳</span><h2>Your gallery is waiting</h2><p>Add an image to keep a meaningful moment close.</p></div>
+            )
+          )}
+          {view === "PROGRESS" && (
+            <ProgressScreen
+              userId={userId}
+              chapter={chapter}
+              goal={goal}
+              progressPercent={progressPercent}
+              completedQuestTitles={completedQuestTitles}
+              completionHistory={completionHistory}
+            />
+          )}
+          {[storageError, signupStorageError, progressStorageError].filter(Boolean).length > 0 && (
+            <p className="records-storage-error" role="alert">{[storageError, signupStorageError, progressStorageError].filter(Boolean).join(" ")}</p>
+          )}
+          {view !== "PROGRESS" && <button className="add-record-trigger" type="button" onClick={() => { setStorageError(""); setCreateRecordOpen(true); }}>+ &nbsp; ADD A NEW RECORD</button>}
         </main>
-          {createRecordOpen && <div className="record-create-overlay" role="dialog" aria-modal="true" aria-labelledby="new-record-title"><form className="record-create-panel" onSubmit={saveRecord}><div className="record-create-top"><button type="button" onClick={resetRecordForm}>× CLOSE</button></div><div className="record-mode-tabs"><button type="button" className={recordMode === "TEXT" ? "active" : ""} onClick={() => setRecordMode("TEXT")}>TEXT RECORD</button><button type="button" className={recordMode === "IMAGE" ? "active" : ""} onClick={() => setRecordMode("IMAGE")}>IMAGE RECORD</button></div><h2 id="new-record-title">NEW RECORD</h2><label><span>DATE:</span><input value={recordDate} onChange={(event) => setRecordDate(event.target.value)} /></label><label><span>TITLE:</span><input value={recordTitle} onChange={(event) => setRecordTitle(event.target.value)} placeholder="TYPE HERE..." autoFocus /></label>{recordMode === "TEXT" ? <><label><span>DESCRIPTION:</span><textarea value={recordDescription} onChange={(event) => setRecordDescription(event.target.value)} placeholder="TYPE HERE..." rows={4} /></label><div className="record-ai"><span>OR GENERATE WITH AI ✨</span><button type="button" onClick={generateDescription}>✨ &nbsp; GENERATE DESCRIPTION WITH AI</button></div><label><span>ATTACH IMAGE (OPTIONAL):</span><input type="file" accept="image/*" onChange={handleRecordImage} /></label>{recordImage && <img className="record-image-attachment" src={recordImage} alt="Attachment preview" />}</> : <label><span>ADD IMAGE:</span><label className="record-upload"><input type="file" accept="image/*" onChange={handleRecordImage} />{recordImage ? <img src={recordImage} alt="Upload preview" /> : <><span className="record-upload-icon">🌄</span><span>TAP TO UPLOAD PROOF IMAGE</span></>}</label></label>}<div className="record-icon-picker"><span>ICON:</span><div>{icons.map((icon) => <button type="button" className={recordIcon === icon ? "selected" : ""} key={icon} onClick={() => setRecordIcon(icon)}>{icon}</button>)}</div></div><button className="add-record-submit" type="submit" disabled={!recordTitle.trim() || (recordMode === "TEXT" ? !recordDescription.trim() : !recordImage)}>ADD RECORD ✓</button></form></div>}
+          {createRecordOpen && (
+            <div className="record-create-overlay" role="presentation" onClick={resetRecordForm}>
+              <form className="record-create-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-title" onSubmit={saveRecord} onClick={(event) => event.stopPropagation()}>
+                <div className="record-create-top"><button type="button" onClick={resetRecordForm}>× CLOSE</button></div>
+                <div className="record-mode-tabs">
+                  <button type="button" className={recordMode === "TEXT" ? "active" : ""} onClick={() => setRecordMode("TEXT")}>TEXT RECORD</button>
+                  <button type="button" className={recordMode === "IMAGE" ? "active" : ""} onClick={() => setRecordMode("IMAGE")}>IMAGE RECORD</button>
+                </div>
+                <h2 id="new-record-title">NEW RECORD</h2>
+                {storageError && <p className="records-storage-error" role="alert">{storageError}</p>}
+                <label><span>DATE:</span><input value={recordDate} onChange={(event) => setRecordDate(event.target.value)} /></label>
+                <label><span>TITLE:</span><input value={recordTitle} onChange={(event) => setRecordTitle(event.target.value)} placeholder="TYPE HERE..." autoFocus /></label>
+                {recordMode === "TEXT" ? (
+                  <>
+                    <label><span>DESCRIPTION:</span><textarea value={recordDescription} onChange={(event) => setRecordDescription(event.target.value)} placeholder="TYPE HERE..." rows={4} /></label>
+                    <div className="record-ai"><span>OR START WITH A SUGGESTION</span><button type="button" onClick={generateDescription}>✨ &nbsp; USE A WRITING SUGGESTION</button></div>
+                    <label><span>ATTACH IMAGE (OPTIONAL):</span><input type="file" accept="image/*" onChange={handleRecordImage} /></label>
+                    {recordImage && <img className="record-image-attachment" src={recordImage} alt="Attachment preview" />}
+                  </>
+                ) : (
+                  <div className="record-image-field">
+                    <span>ADD IMAGE:</span>
+                    <label className="record-upload">
+                      <input type="file" accept="image/*" onChange={handleRecordImage} />
+                      {recordImage ? <img src={recordImage} alt="Upload preview" /> : <><span className="record-upload-icon">🌄</span><span>TAP TO UPLOAD PROOF IMAGE</span></>}
+                    </label>
+                  </div>
+                )}
+                <div className="record-icon-picker"><span>ICON:</span><div>{icons.map((icon) => <button type="button" className={recordIcon === icon ? "selected" : ""} key={icon} onClick={() => setRecordIcon(icon)}>{icon}</button>)}</div></div>
+                <button className="add-record-submit" type="submit" disabled={!recordTitle.trim() || (recordMode === "TEXT" ? !recordDescription.trim() : !recordImage)}>ADD RECORD ✓</button>
+              </form>
+            </div>
+          )}
         <BottomNav active="RECORDS" onSelect={onNavigate} theme={theme} />
       </div>
     </div>
   );
 }
 
-function ProfileSettings({ username, onUsernameChange, onClose, onSignOut }: { username: string; onUsernameChange: (value: string) => void; onClose: () => void; onSignOut: () => void }) {
+function SettingsScreen({ theme, onNavigate, onSignOut }: { theme: Theme; onNavigate: (label: string) => void; onSignOut: () => void }) {
+  const [username, setUsername] = useState(() => (window.localStorage.getItem("lifeos-username") || "USERNAME").slice(0, 25));
+  const updateUsername = (value: string) => {
+    const next = value.trim().slice(0, 25) || "USERNAME";
+    setUsername(next);
+    window.localStorage.setItem("lifeos-username", next);
+  };
+
+  return <ProfileSettings username={username} onUsernameChange={updateUsername} theme={theme} onNavigate={onNavigate} onClose={() => onNavigate("HOME")} onSignOut={onSignOut} />;
+}
+
+function ProfileSettings({ username, onUsernameChange, theme, onNavigate, onClose, onSignOut }: { username: string; onUsernameChange: (value: string) => void; theme: Theme; onNavigate: (label: string) => void; onClose: () => void; onSignOut: () => void }) {
   const [email, setEmail] = useState(() => window.localStorage.getItem("lifeos-email") || "operator@lifeos.app");
   const [password, setPassword] = useState("");
   const [editingEmail, setEditingEmail] = useState(false);
@@ -641,9 +885,9 @@ function ProfileSettings({ username, onUsernameChange, onClose, onSignOut }: { u
     window.localStorage.setItem("lifeos-font", font);
   }, [font]);
 
-  return <div className="profile-settings-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-settings-title">
+  return <div className="profile-settings-overlay settings-screen">
     <div className="profile-settings-page">
-      <header className="profile-settings-header"><div><div className="eyebrow">PROFILE / SYSTEM SETTINGS</div><h2 id="profile-settings-title">SETTINGS</h2></div><button type="button" className="profile-settings-close" onClick={onClose}>× CLOSE</button></header>
+      <header className="profile-settings-header"><div><div className="eyebrow">LIFEOS / SYSTEM SETTINGS</div><h2 id="profile-settings-title">SETTINGS</h2></div><button type="button" className="profile-settings-close" onClick={onClose}>× HOME</button></header>
       <main className="profile-settings-content">
         <section className="settings-section settings-profile-section"><div className="settings-section-heading"><div><span className="settings-section-index">01</span><h3>{languageCopy.profile}</h3></div><p>Manage the details connected to your LifeOS profile.</p></div><div className="settings-form-grid"><label><span>{languageCopy.username}</span><input value={username} maxLength={25} onChange={(event) => onUsernameChange(event.target.value.slice(0, 25))} /></label><div className="settings-account-row"><span>{languageCopy.email}</span>{editingEmail ? <input type="email" value={email} autoFocus onChange={(event) => updateEmail(event.target.value)} onBlur={() => setEditingEmail(false)} onKeyDown={(event) => { if (event.key === "Enter") setEditingEmail(false); }} /> : <strong>{showEmail ? email : `${email.slice(0, 4)}${email.length > 4 ? "********" : ""}${email.includes("@") ? email.slice(email.indexOf("@")) : ""}`}</strong>}<button type="button" className="settings-reveal" onClick={() => setShowEmail((current) => !current)}>{showEmail ? languageCopy.hide : languageCopy.reveal}</button><button type="button" className="settings-edit-button" onClick={() => setEditingEmail(true)}>{editingEmail ? languageCopy.save : languageCopy.edit}</button></div><div className="settings-account-row"><span>{languageCopy.password}</span>{editingPassword ? <input type={showPassword ? "text" : "password"} value={password} autoFocus placeholder="ENTER NEW PASSWORD" onChange={(event) => setPassword(event.target.value)} onBlur={() => setEditingPassword(false)} onKeyDown={(event) => { if (event.key === "Enter") setEditingPassword(false); }} /> : <strong>{password ? (showPassword ? password : "********") : "NOT SET"}</strong>}<button type="button" className="settings-reveal" onClick={() => setShowPassword((current) => !current)}>{showPassword ? languageCopy.hide : languageCopy.reveal}</button><button type="button" className="settings-edit-button" onClick={() => setEditingPassword(true)}>{editingPassword ? languageCopy.save : languageCopy.edit}</button></div></div><p className="settings-note">Your username is limited to 25 characters. Passwords are kept in this session until account security is connected.</p></section>
         <section className="settings-section"><div className="settings-section-heading"><div><span className="settings-section-index">02</span><h3>PERSONALISATION</h3></div><p>Shape the visual system around the way you work.</p></div><div className="settings-inline-grid"><label><span>FONT SYSTEM</span><select value={font} onChange={(event) => setFont(event.target.value)}><option>ORBITRON / RAJDHANI</option><option>SHARE TECH / RAJDHANI</option><option>CLASSIC / SYSTEM</option></select></label><label><span>SOUND PROFILE</span><select value={soundEnabled ? "ON" : "OFF"} onChange={(event) => setSoundEnabled(event.target.value === "ON")}><option>ON</option><option>OFF</option></select></label></div></section>
@@ -652,6 +896,7 @@ function ProfileSettings({ username, onUsernameChange, onClose, onSignOut }: { u
         <section className="settings-section"><div className="settings-section-heading"><div><span className="settings-section-index">05</span><h3>ACCESSIBILITY &amp; PRIVACY</h3></div><p>Control comfort, motion, and data preferences.</p></div><div className="settings-toggle-list"><label className="settings-toggle"><span><strong>REDUCE MOTION</strong><small>Use fewer animated transitions throughout the interface.</small></span><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /><i /></label><button type="button" className="settings-action-row"><span><strong>DOWNLOAD MY DATA</strong><small>Export your profile and progress information.</small></span><b>→</b></button><button type="button" className="settings-action-row danger"><span><strong>DELETE PROFILE DATA</strong><small>Remove locally stored profile information.</small></span><b>→</b></button><button type="button" className="settings-action-row" onClick={onSignOut}><span><strong>SIGN OUT</strong><small>End this local session and keep your profile saved.</small></span><b>→</b></button></div></section>
       </main>
     </div>
+    <BottomNav active="SETTINGS" onSelect={onNavigate} theme={theme} />
   </div>;
 }
 
@@ -720,13 +965,14 @@ function AccountScreen({ theme, setTheme, onNavigate, onSignOut }: { theme: Them
   );
 }
 
-function QuestModal({ success, boss, onClose, onComplete }: { success: boolean; boss: boolean; onClose: () => void; onComplete: () => void }) {
+function QuestModal({ success, boss, error, onClose, onComplete }: { success: boolean; boss: boolean; error?: string; onClose: () => void; onComplete: () => void }) {
   return (
     <div className={`quest-modal${success ? " success" : ""}${boss ? " boss" : ""}`} role="dialog" aria-modal="true">
       <div className="quest-modal-panel">
         {!success && <button className="quest-modal-close" type="button" aria-label="Close quest" onClick={onClose}>×</button>}
-        <div className="eyebrow">{success ? (boss ? "BOSS QUEST LOG UPDATED" : "QUEST LOG UPDATED") : (boss ? "BOSS QUEST / PLACEHOLDER" : "CURRENT QUEST / PLACEHOLDER")}</div>
-        {success ? <h2>{boss ? "BOSS QUEST SUCCESSFULLY COMPLETED" : "QUEST SUCCESSFULLY COMPLETED"}</h2> : <button className="complete-quest-btn" type="button" onClick={onComplete}>{boss ? "COMPLETE BOSS QUEST" : "COMPLETE QUEST"}</button>}
+        <div className="eyebrow">{success ? (boss ? "CHAPTER CHALLENGE COMPLETE" : "PROGRESS RECORDED") : (boss ? "CHAPTER CHALLENGE" : "CURRENT QUEST")}</div>
+        {error && <p className="progress-storage-error" role="alert">{error}</p>}
+        {success ? <h2>{boss ? "Chapter complete" : "Quest complete"}</h2> : <button className="complete-quest-btn" type="button" onClick={onComplete}>{boss ? "Complete chapter challenge" : "Mark quest complete"}</button>}
       </div>
     </div>
   );
@@ -788,6 +1034,13 @@ function CoachPanel({ answers, onClose }: { answers: Answers; onClose: () => voi
   return <div className="feature-overlay" role="dialog" aria-modal="true" aria-labelledby="coach-title"><div className="feature-panel coach-panel"><header className="feature-header"><div><div className="eyebrow">LIFEOS / ADVISOR ONLINE</div><h2 id="coach-title">AI COACH</h2><p>YOUR PERSONAL ADVISOR</p></div><button className="feature-close" type="button" onClick={onClose}>×</button></header><div className="coach-messages">{messages.length === 1 && <div className="coach-intro-note">THINK · UNDERSTAND · PLAN</div>}{messages.map((message, index) => <div className={`coach-message ${message.role}`} key={`${message.role}-${index}`}><span className="eyebrow">{message.role === "coach" ? "COACH" : "YOU"}</span><p>{message.text}</p></div>)}{loading && <div className="coach-message coach"><span className="eyebrow">COACH</span><p className="typing">ADVISOR IS THINKING...</p></div>}</div>{messages.length === 1 && <div className="coach-starters">{COACH_STARTERS.map((starter) => <button type="button" key={starter} onClick={() => send(starter)}>{starter}<span>→</span></button>)}</div>}{error && <p className="feature-error">{error}</p>}<form className="coach-input-row" onSubmit={(event) => { event.preventDefault(); send(); }}><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Tell your advisor what's on your mind..." disabled={loading} /><button className="cta-btn" type="submit" disabled={!draft.trim() || loading}>SEND →</button></form><div className="feature-footnote">OFFLINE ADVISOR PREVIEW · CONNECT AN AI SERVICE TO ENABLE LIVE RESPONSES</div></div></div>;
 }
 
+function AiChatScreen({ answers, theme, onNavigate }: { answers: Answers; theme: Theme; onNavigate: (label: string) => void }) {
+  return <div className="chat-screen-shell">
+    <CoachPanel answers={answers} onClose={() => onNavigate("HOME")} />
+    <BottomNav active="AI CHAT" onSelect={onNavigate} theme={theme} />
+  </div>;
+}
+
 type SideQuest = { id: string; title: string; description: string; purpose: string; objective: string; time: string; difficulty: string; reward: number; category: string; prompt: string };
 const SIDE_QUESTS: SideQuest[] = [
   { id: "next-step", title: "CLARIFY YOUR NEXT STEP", description: "Turn one vague goal into a clear, actionable next step.", purpose: "Reduce uncertainty by naming the smallest useful move.", objective: "Write one sentence beginning with: My next step is...", time: "3 MIN", difficulty: "EASY", reward: 20, category: "DIRECTION", prompt: "My next step is..." },
@@ -814,15 +1067,188 @@ function SideQuestsPanel({ onClose }: { onClose: () => void }) {
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
+type StoredQuestProgress = { completionHistory: QuestCompletion[] };
+
+function getOrCreateLocalUserId() {
+  try {
+    const saved = window.localStorage.getItem("lifeos-local-user-id");
+    if (saved) return saved;
+    const userId = globalThis.crypto.randomUUID();
+    window.localStorage.setItem("lifeos-local-user-id", userId);
+    return userId;
+  } catch {
+    return "guest-local";
+  }
+}
+
+function getLocalProfileValue(key: string, fallback: string) {
+  try {
+    return window.localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isQuestCompletion(value: unknown): value is QuestCompletion {
+  if (!value || typeof value !== "object") return false;
+  const completion = value as Partial<QuestCompletion>;
+  return typeof completion.title === "string"
+    && typeof completion.completedAt === "string"
+    && Number.isFinite(new Date(completion.completedAt).getTime())
+    && (completion.kind === "quest" || completion.kind === "chapter");
+}
+
+function loadQuestProgress(userId: string) {
+  try {
+    const saved = window.localStorage.getItem(`lifeos-progress-${userId}`);
+    if (!saved) return { progress: { completionHistory: [] } as StoredQuestProgress, error: "" };
+    const parsed: unknown = JSON.parse(saved);
+    if (!parsed || typeof parsed !== "object" || !("completionHistory" in parsed)
+      || !Array.isArray(parsed.completionHistory) || !parsed.completionHistory.every(isQuestCompletion)) {
+      throw new Error("Saved progress has an unexpected format.");
+    }
+    return { progress: parsed as StoredQuestProgress, error: "" };
+  } catch {
+    return {
+      progress: { completionHistory: [] } as StoredQuestProgress,
+      error: "Your saved quest progress couldn't be loaded. Check this browser's storage and try again.",
+    };
+  }
+}
+
+function ProfileSheet({
+  onClose,
+  onDeleteData,
+}: {
+  onClose: () => void;
+  onDeleteData: () => boolean;
+}) {
+  const [name, setName] = useState(() => getLocalProfileValue("lifeos-username", "Guest user"));
+  const [email, setEmail] = useState(() => getLocalProfileValue("lifeos-email", ""));
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const saveName = (value: string) => {
+    const next = value.slice(0, 25);
+    setName(next);
+    try {
+      window.localStorage.setItem("lifeos-username", next);
+      setNotice("");
+    } catch {
+      setNotice("Your name couldn't be saved in this browser.");
+    }
+  };
+
+  const saveEmail = (value: string) => {
+    setEmail(value);
+    try {
+      window.localStorage.setItem("lifeos-email", value);
+      setNotice("");
+    } catch {
+      setNotice("Your email couldn't be saved in this browser.");
+    }
+  };
+
+  const continueWithAccount = () => {
+    setNotice("Account creation isn't connected yet. Your progress is saved on this device.");
+  };
+
+  const deleteData = () => {
+    if (!window.confirm("Delete your saved records, reflections, and quest progress from this device? This can't be undone.")) return;
+    if (onDeleteData()) {
+      setName("Guest user");
+      setEmail("");
+      setNotice("Your local records, reflections, and quest progress have been deleted.");
+    } else {
+      setNotice("Your data couldn't be deleted. Please check this browser's storage and try again.");
+    }
+  };
+
+  return (
+    <div className="profile-sheet-backdrop" role="presentation" onClick={onClose}>
+      <section className="profile-sheet" role="dialog" aria-modal="true" aria-labelledby="profile-sheet-title" onClick={(event) => event.stopPropagation()}>
+        <header className="profile-sheet-header">
+          <span className="profile-sheet-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3.5" /><path d="M4.5 20v-1.2a7.5 7.5 0 0 1 15 0V20z" /></svg>
+          </span>
+          <button className="profile-sheet-close" type="button" aria-label="Close profile" autoFocus onClick={onClose}>×</button>
+        </header>
+        <main className="profile-sheet-content">
+          <h2 id="profile-sheet-title">{name || "Guest user"}</h2>
+          <section className="guest-account-card">
+            <span className="guest-account-badge">Guest account</span>
+            <p>Create an account for the best LifeOS experience:</p>
+            <ul><li>Keep your progress</li><li>Continue wherever you are</li><li>Build your story over time</li></ul>
+            <button type="button" onClick={continueWithAccount}>Continue with an account</button>
+          </section>
+
+          <h3 className="profile-account-heading">Account information</h3>
+          <div className="profile-account-details">
+            <details>
+              <summary>Name <span aria-hidden="true">›</span></summary>
+              <label><span>Your name</span><input value={name} maxLength={25} onChange={(event) => saveName(event.target.value)} /></label>
+            </details>
+            <details>
+              <summary>Email <span aria-hidden="true">›</span></summary>
+              <label><span>Email address</span><input type="email" value={email} onChange={(event) => saveEmail(event.target.value)} placeholder="Not added" /></label>
+            </details>
+            <details>
+              <summary>Password <span aria-hidden="true">›</span></summary>
+              <p className="profile-sheet-note">Passwords aren't available until account sign-up is connected.</p>
+            </details>
+            <details>
+              <summary>Account plan <span aria-hidden="true">›</span></summary>
+              <p className="profile-sheet-note">Guest account · Your entries are stored on this device.</p>
+            </details>
+          </div>
+
+          {notice && <p className="profile-sheet-notice" role="status">{notice}</p>}
+          <button className="profile-sheet-continue" type="button" onClick={continueWithAccount}>Continue with an account</button>
+          <button className="profile-sheet-delete" type="button" onClick={deleteData}>Delete account data</button>
+        </main>
+      </section>
+    </div>
+  );
+}
+
 export default function HomeScreen({ answers, onSignOut = () => undefined }: Props & { onSignOut?: () => void }) {
   const quest = getQuestData(answers);
+  const [userId] = useState(getOrCreateLocalUserId);
+  const [signupDetails] = useState(() => {
+    const key = `lifeos-signup-date-${userId}`;
+    const createdAt = new Date().toISOString();
+    try {
+      const saved = window.localStorage.getItem(key);
+      if (saved && Number.isFinite(new Date(saved).getTime())) return { date: saved, error: "" };
+      window.localStorage.setItem(key, createdAt);
+      return { date: createdAt, error: "" };
+    } catch {
+      return { date: createdAt, error: "Your journey start date couldn't be saved in this browser." };
+    }
+  });
+  const signupDate = signupDetails.date;
+  const signupStorageError = signupDetails.error;
+  const [initialQuestProgress] = useState(() => loadQuestProgress(userId));
+  const [questProgress, setQuestProgress] = useState(initialQuestProgress.progress);
+  const [progressStorageError, setProgressStorageError] = useState(initialQuestProgress.error);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
   const [activeNav, setActiveNav] = useState("HOME");
   const [theme, setTheme] = useState<Theme>("dark");
-  const [completedCount, setCompletedCount] = useState(0);
-  const [bossCompleted, setBossCompleted] = useState(false);
   const [questModal, setQuestModal] = useState<"closed" | "open" | "boss-open" | "success" | "boss-success">("closed");
   const [reflectionModal, setReflectionModal] = useState<"closed" | "open" | "closing">("closed");
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const holdTimer = useRef<number | null>(null);
   const [featurePanel, setFeaturePanel] = useState<"coach" | "side-quests" | null>(null);
+  const [selectedQuestIndex, setSelectedQuestIndex] = useState(0);
 
   useEffect(() => {
     if (questModal !== "success" && questModal !== "boss-success") return;
@@ -836,272 +1262,201 @@ export default function HomeScreen({ answers, onSignOut = () => undefined }: Pro
     return () => window.clearTimeout(timer);
   }, [reflectionModal]);
 
-  if (activeNav === "PROFILE") {
-    return <AccountScreen theme={theme} setTheme={setTheme} onNavigate={setActiveNav} onSignOut={onSignOut} />;
+  useEffect(() => {
+    if (!whyOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWhyOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [whyOpen]);
+
+  useEffect(() => () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+  }, []);
+
+  const completionHistory = questProgress.completionHistory;
+  const completedQuestTitles = completionHistory
+    .filter((completion) => completion.kind === "quest")
+    .slice(0, quest.nodes.length)
+    .map((completion) => completion.title);
+  const completedCount = completedQuestTitles.length;
+  const bossCompleted = completionHistory.some((completion) => completion.kind === "chapter");
+  const homeStorageNotice = progressStorageError || signupStorageError;
+  const totalMissions = quest.nodes.length + 1;
+  const completedMissions = completedCount + (bossCompleted ? 1 : 0);
+  const progressPct = (completedMissions / totalMissions) * 100;
+  const progressPercent = Math.round(progressPct);
+
+  if (activeNav === "SETTINGS") {
+    return <SettingsScreen theme={theme} onNavigate={setActiveNav} onSignOut={onSignOut} />;
   }
-  if (activeNav === "SHOP") {
-    return <ShopScreen theme={theme} onNavigate={setActiveNav} />;
+  if (activeNav === "AI CHAT") {
+    return <AiChatScreen answers={answers} theme={theme} onNavigate={setActiveNav} />;
   }
   if (activeNav === "MISSIONS") {
     return <MissionsScreen theme={theme} onNavigate={setActiveNav} />;
   }
   if (activeNav === "RECORDS") {
-    return <RecordsScreen theme={theme} onNavigate={setActiveNav} />;
+    return (
+      <RecordsScreen
+        theme={theme}
+        onNavigate={setActiveNav}
+        userId={userId}
+        signupDate={signupDate}
+        signupStorageError={signupStorageError}
+        progressStorageError={progressStorageError}
+        goal={quest.title}
+        chapter={quest.chapter}
+        progressPercent={progressPercent}
+        completedQuestTitles={completedQuestTitles}
+        completionHistory={completionHistory}
+      />
+    );
   }
 
-  // New journeys begin with an empty, locked path.
-  const nodeStates: NodeState[] = quest.nodes.map((_, i) => i < completedCount ? "done" : i === completedCount ? "current" : "locked");
-
-  // Zigzag offsets for the 6 nodes
-  const zigzag = [0, 0, 0, 0, 0, 0];
-
-  const totalMissions = quest.nodes.length + 1;
-  const completedMissions = completedCount + (bossCompleted ? 1 : 0);
-  const progressPct = (completedMissions / totalMissions) * 100;
   const canAccessBoss = completedCount === quest.nodes.length && !bossCompleted;
+  const selectedIsTask = selectedQuestIndex < quest.nodes.length;
+  const selectedIsBoss = selectedQuestIndex === quest.nodes.length;
+  const selectedIsReflection = selectedQuestIndex === quest.nodes.length + 1;
+  const selectedIsComplete = selectedIsTask && selectedQuestIndex < completedCount || selectedIsBoss && bossCompleted;
+  const selectedIsCurrent = selectedIsTask && selectedQuestIndex === completedCount || selectedIsBoss && canAccessBoss || selectedIsReflection && bossCompleted;
+  const selectedIsLocked = !selectedIsComplete && !selectedIsCurrent;
+  const selectedStep = selectedIsTask ? quest.nodes[selectedQuestIndex] : null;
+  const selectedTitle = selectedStep?.title ?? (selectedIsBoss ? "Meet the chapter challenge" : "Look back with intention");
+  const selectedReason = selectedStep?.reason ?? (selectedIsBoss ? "Bring the pieces together and notice how far you've come." : "A moment of reflection helps you carry the useful parts forward.");
 
-  const goalDisplay = quest.title.toUpperCase().slice(0, 32);
+  const saveQuestCompletion = (completion: QuestCompletion) => {
+    const nextProgress = { completionHistory: [...completionHistory, completion] };
+    try {
+      window.localStorage.setItem(`lifeos-progress-${userId}`, JSON.stringify(nextProgress));
+      setQuestProgress(nextProgress);
+      setProgressStorageError("");
+      return true;
+    } catch {
+      setProgressStorageError("Your quest couldn't be recorded. Check this browser's storage and try again.");
+      return false;
+    }
+  };
+
+  const deleteLocalUserData = () => {
+    try {
+      window.localStorage.removeItem(`lifeos-records-${userId}`);
+      window.localStorage.removeItem(`lifeos-reflections-${userId}`);
+      window.localStorage.removeItem(`lifeos-progress-${userId}`);
+      window.localStorage.removeItem("lifeos-username");
+      window.localStorage.removeItem("lifeos-email");
+      setQuestProgress({ completionHistory: [] });
+      setProgressStorageError("");
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const startQuestHold = (event?: React.PointerEvent<HTMLButtonElement>) => {
+    if ((event && event.button !== 0) || holdTimer.current !== null) return;
+    if (event) event.currentTarget.setPointerCapture(event.pointerId);
+    setIsHolding(true);
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      setIsHolding(false);
+      if (selectedIsCurrent && selectedIsTask) setQuestModal("open");
+      else if (selectedIsCurrent && selectedIsBoss) setQuestModal("boss-open");
+      else if (selectedIsCurrent && selectedIsReflection) setReflectionModal("open");
+    }, 1400);
+  };
+
+  const cancelQuestHold = () => {
+    if (holdTimer.current === null) return;
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    setIsHolding(false);
+  };
 
   return (
-    <div className={`home-shell theme-${theme}`} style={{
-      minHeight: "100vh",
-      background: "var(--app-bg, #020a14)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "1rem",
-      position: "relative",
-      overflow: "hidden",
-    }}>
-      {/* Scanlines */}
-      <div className="scanlines" style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }} />
-
-      {/* Outer frame — mimics the wireframe phone HUD */}
-      <div style={{
-        width: "100%",
-        maxWidth: "min(92vw, 1200px)",
-        minHeight: "calc(100vh - 2rem)",
-        maxHeight: "none",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-        border: "1px solid var(--frame-border, #0d3a5c)",
-        background: "var(--app-bg, #020a14)",
-        zIndex: 1,
-        overflow: "hidden",
-      }}>
-        {/* Outer frame corners */}
-        <HudCorners bright size={22} />
-
-        {/* Top edge decoration lines */}
-        <div style={{ position: "absolute", top: 0, left: 22, right: 22, height: 1, background: "linear-gradient(90deg, transparent, var(--accent, #00c8ff) 30%, var(--accent, #00c8ff) 70%, transparent)", opacity: 0.6 }} />
-        <div style={{ position: "absolute", bottom: 0, left: 22, right: 22, height: 1, background: "linear-gradient(90deg, transparent, var(--accent, #00c8ff) 30%, var(--accent, #00c8ff) 70%, transparent)", opacity: 0.6 }} />
-
-        {/* Side edge notch decorations */}
-        {[-1, 1].map((side) => (
-          <div key={side} style={{
-            position: "absolute",
-            top: "40%",
-            [side === -1 ? "left" : "right"]: -1,
-            width: 4,
-            height: 40,
-            background: "var(--accent, #00c8ff)",
-            opacity: 0.4,
-          }} />
-        ))}
-
-        {/* ── HEADER ── */}
-        <div style={{ padding: "0.7rem 1rem 0.45rem", borderBottom: "1px solid var(--frame-border, #0d3a5c)", flexShrink: 0 }}>
-          {/* Goal label */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "var(--accent, #00c8ff)", letterSpacing: "0.12em" }}>
-              CURRENT GOAL:
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "var(--header-text, #c8eeff)", letterSpacing: "0.08em", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {goalDisplay}
-            </span>
+    <div className={`home-shell home-redesign theme-${theme}`}>
+      <div className="home-frame">
+        <header className="home-progress">
+          <button ref={profileButtonRef} className="home-profile-button" type="button" aria-label="Open profile" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={() => setProfileOpen(true)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.5" r="3.5" /><path d="M4.5 20v-1.2a7.5 7.5 0 0 1 15 0V20z" /></svg>
+          </button>
+          <h1 className="home-goal">I will <strong>{quest.title}</strong>.</h1>
+          <div className="home-progress-copy">
+            <span>{progressPercent}% complete</span>
           </div>
-
-          {/* Progress bar */}
-          <div style={{ height: 4, background: "var(--progress-bg, #071525)", border: "1px solid var(--frame-border, #0d3a5c)", overflow: "visible", position: "relative" }}>
-            <div style={{
-              height: "100%",
-              width: `${progressPct}%`,
-              background: "linear-gradient(90deg, var(--progress-start, #0055aa), var(--accent, #00c8ff))",
-              boxShadow: "0 0 5px var(--accent-strong, #00e5ff), 0 0 12px var(--accent, #00c8ff), 0 0 24px rgba(0,200,255,0.8)",
-              transition: "width 0.6s ease",
-            }} />
+          <div className="home-progress-track" role="progressbar" aria-label="Chapter progress" aria-valuenow={progressPercent} aria-valuemax={100}>
+            <span style={{ width: `${progressPct}%` }} />
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 3 }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.5rem", color: "var(--muted-text, #4a7a99)" }}>
-              {completedMissions}/{totalMissions} MISSIONS
-            </span>
-          </div>
-        </div>
+        </header>
 
-        {/* ── CURRENT QUEST BANNER ── */}
-        <div style={{ padding: "0.55rem 1rem 0", flexShrink: 0 }}>
-          <div style={{
-            position: "relative",
-            background: "var(--surface, #071525)",
-            border: "1px solid var(--frame-border, #0d3a5c)",
-            padding: "0.75rem 1rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-          }}>
-            <HudCorners />
-            {/* Octagon warning icon */}
-            <div style={{
-              width: 36,
-              height: 36,
-              flexShrink: 0,
-              background: "var(--accent-soft, rgba(0,200,255,0.05))",
-              border: "1px solid var(--accent-border, rgba(0,200,255,0.3))",
-              clipPath: "polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "0.9rem",
-            }}>
-              ❗
-            </div>
-            <div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "0.65rem", color: "var(--accent, #00c8ff)", fontWeight: 700, letterSpacing: "0.1em" }}>
-                CURRENT Chapter:
-              </div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: "0.9rem", color: "var(--primary-text, #c8eeff)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 1 }}>
-                {quest.current}
-              </div>
-            </div>
-          </div>
-        </div>
+        <section className="home-chapter" aria-label="Current chapter">
+          <span>CHAPTER {quest.chapterNumber}</span>
+          <h2>{quest.chapter}</h2>
+        </section>
 
-        {/* ── MAIN CONTENT AREA (quest path + side panels) ── */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden", minHeight: 0 }}>
-          {/* AI COACH — left side panel */}
-          <div style={{
-            position: "absolute",
-            left: 0,
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: 20,
-            zIndex: 2,
-          }}>
-            <button type="button" aria-label="Open AI Coach" onClick={() => setFeaturePanel("coach")} style={{
-              position: "relative",
-              background: "var(--surface, #071525)",
-              border: "1px solid var(--frame-border, #0d3a5c)",
-              borderLeft: "none",
-              padding: "1.5rem 0.35rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: "inherit",
-            }}>
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.5rem",
-                color: "var(--muted-text, #4a7a99)",
-                letterSpacing: "0.1em",
-                writingMode: "vertical-rl",
-                transform: "rotate(180deg)",
-                userSelect: "none",
-              }}>
-                ‹ AI COACH
-              </span>
-            </button>
-          </div>
+        <main className="quest-stage" aria-label="Current quest">
+          <article className={`quest-card${selectedIsBoss ? " boss-card" : ""}${selectedIsLocked ? " locked-card" : ""}${selectedIsComplete ? " completed-card" : ""}`}>
+            <h2>{selectedTitle}</h2>
+            {selectedIsComplete ? (
+              <span className="quest-complete-label">✓ &nbsp; QUEST COMPLETE</span>
+            ) : selectedIsLocked ? (
+              <p className="quest-card-notice">Complete the earlier quests to unlock this step.</p>
+            ) : (
+              <button
+                className={`quest-hold-target${isHolding ? " is-holding" : ""}`}
+                type="button"
+                aria-label={`Press and hold to begin: ${selectedTitle}`}
+                aria-pressed={isHolding}
+                onPointerDown={startQuestHold}
+                onPointerUp={cancelQuestHold}
+                onPointerCancel={cancelQuestHold}
+                onLostPointerCapture={cancelQuestHold}
+                onKeyDown={(event) => {
+                  if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+                    event.preventDefault();
+                    startQuestHold();
+                  }
+                }}
+                onKeyUp={(event) => {
+                  if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    cancelQuestHold();
+                  }
+                }}
+                onBlur={cancelQuestHold}
+              >
+                <svg viewBox="0 0 100 100" aria-hidden="true"><path pathLength="1" d="M50 2 H74 A24 24 0 0 1 98 26 V74 A24 24 0 0 1 74 98 H26 A24 24 0 0 1 2 74 V26 A24 24 0 0 1 26 2 H50" /></svg>
+              </button>
+            )}
+          </article>
+          <p className={`home-hold-label${isHolding ? " is-holding" : ""}`}>{isHolding ? "KEEP HOLDING" : "PRESS AND HOLD TO BEGIN"}</p>
+          <button className="why-matters-button" type="button" onClick={() => setWhyOpen(true)}>
+            <svg className="why-bulb" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4m-2-20a7 7 0 0 0-4 12.7c.8.5 1 1.3 1 2.3h6c0-1 .2-1.8 1-2.3A7 7 0 0 0 12 1Z" /><path d="M12 1v-1m8 4 1-.6M4 4l-1-.6M22 12h1M1 12H0" /></svg>
+            <span>Why this matters?</span>
+            <span className="why-chevron" aria-hidden="true">›</span>
+          </button>
+        </main>
 
-          {/* SIDE QUESTS — right side panel */}
-          <div style={{
-            position: "absolute",
-            right: 0,
-            top: "50%",
-            transform: "translateY(-50%)",
-            width: 20,
-            zIndex: 2,
-          }}>
-            <button type="button" aria-label="Open Side Quests" onClick={() => setFeaturePanel("side-quests")} style={{
-              position: "relative",
-              background: "var(--surface, #071525)",
-              border: "1px solid var(--frame-border, #0d3a5c)",
-              borderRight: "none",
-              padding: "1.5rem 0.35rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: "inherit",
-            }}>
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.5rem",
-                color: "var(--muted-text, #4a7a99)",
-                letterSpacing: "0.1em",
-                writingMode: "vertical-rl",
-                userSelect: "none",
-              }}>
-                SIDE QUESTS ›
-              </span>
-            </button>
-          </div>
-
-          {/* ── QUEST PATH ── */}
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            gap: 0,
-            padding: "0.95rem 36px",
-            overflowY: "auto",
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", gap: 0 }}>
-              {quest.nodes.map((label, i) => {
-                const offsetX = zigzag[i] || 0;
-                const state = nodeStates[i];
-
-                return (
-                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", position: "relative" }}>
-                    <div style={{ height: i > 0 ? 44 : 0, flexShrink: 0 }} />
-                    <QuestNode label={label} state={state} offsetX={offsetX} index={i} onClick={state === "current" ? () => setQuestModal("open") : undefined} />
-                  </div>
-                );
-              })}
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "2rem", paddingBottom: "1.5rem" }}>
-                <button className={`path-action boss-action${bossCompleted ? " completed" : ""}`} type="button" disabled={!canAccessBoss} onClick={() => setQuestModal("boss-open")}>
-                  <span style={{ fontSize: "1rem" }}>⚠️</span>
-                  <span>BOSS</span>
-                </button>
-                <button className="path-action reflection-action" type="button" disabled={!bossCompleted} onClick={() => setReflectionModal("open")}>
-                  <span style={{ fontSize: "1rem" }}>🔖</span>
-                  <span>
-                    <strong>END OF QUEST</strong>
-                    <small>REFLECTION</small>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BottomNav active={activeNav} onSelect={setActiveNav} theme={theme} />
+        {homeStorageNotice && <p className="home-storage-error" role="alert">{homeStorageNotice}</p>}
+        {profileOpen && <ProfileSheet onClose={() => { setProfileOpen(false); profileButtonRef.current?.focus(); }} onDeleteData={deleteLocalUserData} />}
 
         {questModal !== "closed" && (
           <QuestModal
             success={questModal === "success" || questModal === "boss-success"}
             boss={questModal === "boss-open" || questModal === "boss-success"}
+            error={progressStorageError}
             onClose={() => setQuestModal("closed")}
             onComplete={() => {
               if (questModal === "boss-open") {
-                setBossCompleted(true);
+                if (!saveQuestCompletion({ title: selectedTitle, completedAt: new Date().toISOString(), kind: "chapter" })) return;
+                setSelectedQuestIndex(quest.nodes.length + 1);
                 setQuestModal("boss-success");
                 return;
               }
-              setCompletedCount((count) => Math.min(count + 1, quest.nodes.length));
+              if (!saveQuestCompletion({ title: selectedTitle, completedAt: new Date().toISOString(), kind: "quest" })) return;
+              setSelectedQuestIndex((index) => Math.min(index + 1, quest.nodes.length));
               setQuestModal("success");
             }}
           />
@@ -1111,11 +1466,19 @@ export default function HomeScreen({ answers, onSignOut = () => undefined }: Pro
           <ReflectionModal closing={reflectionModal === "closing"} onClose={() => setReflectionModal("closing")} />
         )}
 
+        {whyOpen && (
+          <div className="why-matters-overlay" role="presentation" onClick={() => setWhyOpen(false)}>
+            <section className="why-matters-sheet" role="dialog" aria-modal="true" aria-labelledby="why-matters-title" onClick={(event) => event.stopPropagation()}>
+              <button className="why-matters-close" type="button" aria-label="Close" onClick={() => setWhyOpen(false)}>×</button>
+              <h2 id="why-matters-title">{selectedTitle}</h2>
+              <h3>Why this matters?</h3>
+              <p>{selectedReason}</p>
+            </section>
+          </div>
+        )}
+
         {featurePanel === "coach" && <CoachPanel answers={answers} onClose={() => setFeaturePanel(null)} />}
         {featurePanel === "side-quests" && <SideQuestsPanel onClose={() => setFeaturePanel(null)} />}
-
-        {/* ── BOTTOM NAV ── */}
-        <BottomNav active={activeNav} onSelect={setActiveNav} theme={theme} />
       </div>
     </div>
   );
